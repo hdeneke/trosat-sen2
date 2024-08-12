@@ -19,14 +19,16 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 # Authors/Copyright(2012-2024):
-# -Hartwig Deneke (deneke@tropos.de)
+# * Hartwig Deneke (deneke@tropos.de)
 
 import glob
 from setuptools import setup
+import versioneer
 
 setup(
     name         = 'trosat-sen2',
-    version      = '0.9a',
+    version      = versioneer.get_version(),
+    cmdclass     = versioneer.get_cmdclass(),
     author       = 'Hartwig Deneke', 
     author_email = 'deneke@tropos.de',
     license      = 'GPLv3',

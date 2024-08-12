@@ -33,3 +33,6 @@ from .core import *
 from . import meta
 from . import tilepar
 
+
+from . import _version
+__version__ = _version.get_versions()['version']

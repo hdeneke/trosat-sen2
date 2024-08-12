@@ -1,0 +1,15 @@
+Metadata-Version: 2.1
+Name: trosat-sen2
+Version: 0.9a0
+Summary: Package for working with Sentinel-2 data
+Author: Hartwig Deneke
+Author-email: deneke@tropos.de
+License: GPLv3
+Keywords: Sentinel-2
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: GNU General Public License v3 (GPLv3)
+Classifier: Programming Language :: Python :: 3
+License-File: LICENSE.txt
+Requires-Dist: attrdict
+Requires-Dist: gdal

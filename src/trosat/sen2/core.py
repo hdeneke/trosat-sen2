@@ -60,16 +60,14 @@ class safe_reader(object):
         elif os.path.isdir(self.path):
             self.zipfile = None
         else:
-            raise ValueError('argument name is neither zipfile nor directory')
+            raise ValueError('name is neither zipfile nor directory')
 
         # read manifest file
-        self.manifest = self.parse_xml_file('manifest.safe')
+        self.manifest = self.read_xml('manifest.safe')
 
         # get data objects
         xpath_data_obj = './dataObjectSection/dataObject'
         self.data_obj = { e.attrib['ID']:AttrDict(parse_data_obj(e)) for e in  self.manifest.findall(xpath_data_obj) }
-
-        # call processing-level specific initialization
         if 'S2_Level-1C_Product_Metadata' in self.data_obj:
             self.proc_level = 'Level-1C'
             self.init_l1c()
@@ -83,8 +81,8 @@ class safe_reader(object):
     def init_l1c(self):
         
         # parse tile/product xml metadata
-        self.tile_meta = self.parse_xml_file(self.data_obj['S2_Level-1C_Tile1_Metadata'].relpath)
-        self.prod_meta = self.parse_xml_file(self.data_obj['S2_Level-1C_Product_Metadata'].relpath)
+        self.tile_meta = self.read_xml(self.data_obj['S2_Level-1C_Tile1_Metadata'].relpath)
+        self.prod_meta = self.read_xml(self.data_obj['S2_Level-1C_Product_Metadata'].relpath)
 
         # open gdal dataset
         p = self.path if self.zipfile else os.path.join(self.path,'MTD_MSIL1C.xml')
@@ -130,10 +128,7 @@ class safe_reader(object):
             f.close()
         return s
 
-    def 
-
-
-    def parse_xml_file(self, name):
+    def read_xml(self, name):
         '''
         Get XML file from SAFE archive and return parsed XML tree
         '''
@@ -225,7 +220,7 @@ class safe_reader(object):
         yax = y-dy*np.arange(szen.shape[0],dtype=np.float)
         return szen,sazi,(xax,yax)
 
-    def get_xy_axes(self, resolution="10m", bounds=False):
+    def get_axes_xy(self, resolution="10m", bounds=False):
         x0,dx,_,y0,_,dy = self.gdal_sds[resolution].GetGeoTransform()
         nx = self.gdal_sds[resolution].RasterXSize
         ny = self.gdal_sds[resolution].RasterYSize

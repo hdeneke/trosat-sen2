@@ -1,7 +1,7 @@
 import os, os.path
 import re
 import zipfile
-from attrdict import AttrDict
+from addict import Dict as adict
 from lxml import etree as et
 from cached_property import cached_property
 import numpy as np
@@ -67,7 +67,7 @@ class safe_reader(object):
 
         # get data objects
         xpath_data_obj = './dataObjectSection/dataObject'
-        self.data_obj = { e.attrib['ID']:AttrDict(parse_data_obj(e)) for e in  self.manifest.findall(xpath_data_obj) }
+        self.data_obj = { e.attrib['ID']:adict(parse_data_obj(e)) for e in  self.manifest.findall(xpath_data_obj) }
         if 'S2_Level-1C_Product_Metadata' in self.data_obj:
             self.proc_level = 'Level-1C'
             self.init_l1c()
@@ -93,7 +93,7 @@ class safe_reader(object):
             res = sds.split(':')[-2]
             self.gdal_sds[res] = gdal.Open(sds, gdal.GA_ReadOnly)
         # set band meta data
-        self.band_meta = AttrDict()
+        self.band_meta = adict()
         for res in ('10m','20m','60m'):
             for i in range(self.gdal_sds[res].RasterCount):
                 raster = self.gdal_sds[res].GetRasterBand(i+1)
@@ -101,7 +101,7 @@ class safe_reader(object):
                 bmeta['resolution'] = res
                 bmeta['index'] = i+1
                 bmeta['bandname'] = re.sub('B(\d)$',r'B0\1',bmeta['bandname'])
-                self.band_meta[bmeta['bandname']] = AttrDict(bmeta)
+                self.band_meta[bmeta['bandname']] = adict(bmeta)
         return
 
     def init_l2a(self):

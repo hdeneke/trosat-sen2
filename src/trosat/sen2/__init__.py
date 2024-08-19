@@ -27,7 +27,7 @@
 # * Jonas Witthuhn (witthuhn@tropos.de)
 
 import pkg_resources as pkg_res
-import ogr
+from osgeo import ogr
 
 from .core import *
 from . import meta

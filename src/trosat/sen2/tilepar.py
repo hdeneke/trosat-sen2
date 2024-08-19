@@ -1,7 +1,7 @@
 import pkg_resources as pkg_res
 import numpy as np
 import pyproj
-import ogr
+from osgeo import ogr
 
 # Latitude bands for UTM projection, generated with the following code:
 utm_lat_bands = 'CDEFGHJKLMNPQRSTUVWX'

@@ -346,5 +346,21 @@ class l1c_reader(safe_reader):
         rb = self.get_band_ref(b)
         res_alg = resample_map[resample_alg] if isinstance(resample_alg, str) else resample_alg
         return read_band(rb, resolution, res_alg, sx, sy)
-        
+
+    @cached_property
+    def l1c_mtd(self):
+        return self.parse_xml(self.data_obj["S2_Level-1C_Product_Metadata"].relpath)
+
+    @cached_property
+    def inspire_mtd(self):
+        return self.parse_xml(self.data_obj["INSPIRE_Metadata"].relpath)
+
+    @cached_property
+    def tile_mtd(self):
+        return self.parse_xml(self.data_obj["S2_Level-1C_Tile1_Metadata"].relpath)
+
+    @cached_property
+    def datastrip_mtd(self):
+        return self.parse_xml(self.data_obj["S2_Level-1C_Datastrip1_Metadata"].relpath)
+
 

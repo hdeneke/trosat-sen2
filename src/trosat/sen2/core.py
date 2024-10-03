@@ -1,4 +1,5 @@
 # Python standard library imports
+import enum
 import os
 import re
 import zipfile
@@ -6,13 +7,16 @@ import zipfile
 # SciPy imports
 import numpy as np
 import xarray as xr
+
+# OSGeo imports
+from osgeo import gdal, ogr, osr
 import pyproj
 
-from osgeo import gdal, ogr, osr
-
+# misc. function or class imports
 from functools import cached_property
 from addict import Dict as adict
 
+# package-local imports
 from . import tilepar
 
 # enable GDAL/OGR/OSR exceptions to silence warning
@@ -136,72 +140,79 @@ def parse_zen_azi(e):
     azi  = np.array([ [float(v) for v in s.text.split()] for s in e.find('Azimuth/Values_List')])
     return zen,azi
 
+def slice_band(rb, sx, sy):
+    '''
+    Get a sub-region of a gdal.Band given by slices
+
+    Parameters
+    ----------
+    rb : gdal.Band
+       the GDAL raster band
+    sx : slice or None
+       the slice along the x-axis
+    sy : slice or None
+       the slice along the y-axis
+
+    Returns
+    -------
+    
+    '''
+
+    # determine raster size
+    ds = rb.GetDataset()
+    nx,ny = ds.RasterXSize, ds.RasterYSize
+    # get range of sub-window to read
+    sx = sx or slice(None)
+    sy = sy or slice(None)
+    xl,xr,dx = sx.indices(nx)
+    yu,yb,dy = sy.indices(ny)
+    # sanity checks
+    if dx<0 or dy<0: 
+        raise ValueError("negative strides not supported")
+    if xl>xr or yu>yb: 
+        raise ValueError("start greater stop in slice not supported")            
+    # read raster
+    arr = rb.ReadAsArray(xoff=xl, yoff=yu, win_xsize=xr-xl,win_ysize=yb-yu)
+    return arr[::dx,::dy]
+
+def translate_band(rb, res, res_alg, sx=None, sy=None):
+    '''
+    Translate a gdal.Band to new resolution, optionally selecting a sub-region by slices
+    '''        
+    # get Dataset of raster and get raster shape / resolution
+    ds = rb.GetDataset()
+    xx,nat_res,_,yy,_,_ = ds.GetGeoTransform()
+    nx,ny = ds.RasterXSize,ds.RasterYSize
+    # get shape in new resolution
+    nx = math.floor(nx*nat_res/res)
+    ny = math.floor(ny*nat_res/res)
+    # determine requested sub-window
+    sx = sx or slice(None)
+    sy = sy or slice(None)
+    xl,xr,dx = sx.indices(nx)
+    yu,yb,dy = sy.indices(ny)
+    # sanity checks
+    if dx<0 or dy<0: 
+        raise ValueError("Negative strides not supported")
+    if xl>xr or yu>yb: 
+        raise ValueError("start greater stop in slice not supported")            
+    # prepare translate options
+    topts = gdal.TranslateOptions(
+        format="MEM",
+        bandList=[rb.GetBand()],
+        projWin=[xx+res*xl, yy-res*yu, xx+res*xr, yy-res*yb],
+        xRes=float(res),
+        yRes=float(res),
+        resampleAlg=res_alg,
+    )
+    # apply translation
+    mds = gdal.Translate('', ds, options=topts)
+    # read translated array and return it
+    arr = mds.GetRasterBand(1).ReadAsArray()
+    return arr[::dx,::dy]
+
 
 class safe_reader(object):
-
-    # list of band names
-    bands = [ 'B01', 'B02', 'B03', 'B04', 'B05', 'B06', 'B07', \
-              'B08', 'B8A', 'B09', 'B10', 'B11', 'B12'         ]
-
-    def __init__(self, name, mode='r'):
-
-        # init path/name attributes
-        self.path    = os.path.abspath(name)
-        self.name    = os.path.basename(name)
-        self.safe_id = os.path.splitext(self.name)[0]
-
-        # check if 1. argument is a zipfile or directory
-        if zipfile.is_zipfile(self.path):
-            self.zipfile = zipfile.ZipFile(name,mode)
-        elif os.path.isdir(self.path):
-            self.zipfile = None
-        else:
-            raise ValueError('name is neither zipfile nor directory')
-
-        # read manifest file
-        self.manifest = self.read_xml('manifest.safe')
-
-        # get data objects
-        xpath_data_obj = './dataObjectSection/dataObject'
-        self.data_obj = { e.attrib['ID']:adict(parse_data_obj(e)) for e in  self.manifest.findall(xpath_data_obj) }
-        if 'S2_Level-1C_Product_Metadata' in self.data_obj:
-            self.proc_level = 'Level-1C'
-            self.init_l1c()
-        elif 'S2_Level-2A_Product_Metadata' in self.data_obj:
-            self.proc_level = 'Level-2A'
-            self.init_l2a()
-        else:
-            self.proc_level = 'Unknown'
-        return
-
-    def init_l1c(self):
-        
-        # parse tile/product xml metadata
-        self.tile_meta = self.read_xml(self.data_obj['S2_Level-1C_Tile1_Metadata'].relpath)
-        self.prod_meta = self.read_xml(self.data_obj['S2_Level-1C_Product_Metadata'].relpath)
-
-        # open gdal dataset
-        p = self.path if self.zipfile else os.path.join(self.path,'MTD_MSIL1C.xml')
-        self.gdal_ds = gdal.Open(p, gdal.GA_ReadOnly)
-        # open gdal sub-datasets
-        self.gdal_sds = {}
-        for sds,_ in self.gdal_ds.GetSubDatasets():
-            res = sds.split(':')[-2]
-            self.gdal_sds[res] = gdal.Open(sds, gdal.GA_ReadOnly)
-        # set band meta data
-        self.band_meta = adict()
-        for res in ('10m','20m','60m'):
-            for i in range(self.gdal_sds[res].RasterCount):
-                raster = self.gdal_sds[res].GetRasterBand(i+1)
-                bmeta =  {k.lower():v for k,v in raster.GetMetadata_Dict().items()}
-                bmeta['resolution'] = res
-                bmeta['index'] = i+1
-                bmeta['bandname'] = re.sub('B(\d)$',r'B0\1',bmeta['bandname'])
-                self.band_meta[bmeta['bandname']] = adict(bmeta)
-        return
-
-    def init_l2a(self):
-        return
 
     def read_file(self, name):
         '''
@@ -214,6 +225,7 @@ class safe_reader(object):
         size : int,optional
             The maximum number of bytes to read
         '''
+
         if self.zipfile:
             p = os.path.normpath(os.path.join(self.safe_id+'.SAFE', name))
             s = self.zipfile.read(p)
@@ -224,122 +236,16 @@ class safe_reader(object):
             f.close()
         return s
 
-    def read_xml(self, name):
+    def parse_xml(self, fpath):
         '''
-        Get XML file from SAFE archive and return parsed XML tree
-        '''
-        s = self.read_file(name)
-        return et.fromstring(s)
-
-    def read_band(self, bnd, resolution=None, resampling=None, sx=None, sy=None):
-        '''
-        Read Sentinel-2 band
+        Get XML file from SAFE archive/directory and get XML tree
 
         Parameters
         ----------
-        bnd : str
-            The band name, 'B01'...'B11' and 'B8A'
-        resolution: None, int or str
-            The resolution as None, int or string(e.g. '20m','native')
-        resampling: str, default= 'average' if resolution>'native' else 'cubic'
-            The resampling algorithm, valid choices are 'nearest','bilinear','cubic','cubic_spline',
-            'average','lanczos','min','max','mode','median','Q1','Q3'
-        sx : None or slice
-            Slice along the x-axis, applied after resampling
-        sy : None or slice
-            Slice along the y-axis, applied after resampling
-        '''
+        fpath : str
+            The path of the file to parse
+        '''        
 
-        # get band metadata
-        bm = self.band_meta[bnd]
-        res = bm['resolution']
-        i = bm['index']
+        s = self.read_file(fpath)
+        return et.fromstring(s)
 
-        kwargs = {}
-
-        # if we do not need to resample...
-        if resolution in {None,'native'} or resolution==res:
-            # ... we can return a virtual array view
-            # get kwargs dict from slices
-            if sx: kwargs.update({'xoff':sx.start,'xsize':sx.stop-sx.start, 'bufxsize':sx.stop-sx.start})
-            if sy: kwargs.update({'yoff':sy.start,'ysize':sy.stop-sy.start, 'bufysize':sy.stop-sy.start})
-            return self.gdal_sds[res].GetRasterBand(i).GetVirtualMemArray(**kwargs)
-        # otherwise do resampling
-        # get resolution
-        r = int(resolution[:-1])
-        # set default resampling
-        if resampling is None:
-            rorig = int(res[:-1])
-            resampling = 'average' if r>rorig else 'nearest'
-        # resample
-        d1 = gdal.Translate('', self.gdal_sds[res], format='VRT', bandList=[i])
-        d2 = gdal.Warp('', d1, format='VRT', xRes=r, yRes=r, resampleAlg=resample_map[resampling])
-        if sx: kwargs.update({'xoff':sx.start,'win_xsize':sx.stop-sx.start})
-        if sy: kwargs.update({'yoff':sy.start,'win_ysize':sy.stop-sy.start})
-        a = d2.GetRasterBand(1).ReadAsArray(**kwargs)
-        del d1,d2
-        return a
-
-    def get_tile_id(self):
-        return self.tile_meta.find('n1:General_Info/TILE_ID',self.tile_meta.nsmap).text
-
-
-    def get_sensing_time(self):
-        tstr = self.tile_meta.find('n1:General_Info/SENSING_TIME', self.tile_meta.nsmap).text
-        return np.datetime64(tstr[:-1])
-    
-
-    def get_epsg_code(self):
-        '''
-        Get EPSG code
-        '''
-        s = self.tile_meta.find('n1:Geometric_Info/Tile_Geocoding/HORIZONTAL_CS_CODE', self.tile_meta.nsmap).text
-        return int(s.split(':')[1])
-
-
-    def get_ul_xy(self):
-        '''
-        Get the xy coordinates for the upper left corner
-        '''
-        x,_,_,y,_,_ = self.gdal_sds["10m"].GetGeoTransform()
-        return x,y
-
-
-    def get_sun_angles(self, axes=False):
-        e = self.tile_meta.find('n1:Geometric_Info/Tile_Angles/Sun_Angles_Grid', self.tile_meta.nsmap)
-        szen,sazi = parse_zen_azi(e)
-        if not axes:
-            return szen,sazi
-        x,y = self.get_ul_xy()
-        dx,dy = ( float(e.find('Zenith/'+s).text) for s in ('COL_STEP','ROW_STEP'))
-        xax = x+dx*np.arange(szen.shape[1],dtype=np.float)
-        yax = y-dy*np.arange(szen.shape[0],dtype=np.float)
-        return szen,sazi,(xax,yax)
-
-    def get_axes_xy(self, resolution="10m", bounds=False):
-        x0,dx,_,y0,_,dy = self.gdal_sds[resolution].GetGeoTransform()
-        nx = self.gdal_sds[resolution].RasterXSize
-        ny = self.gdal_sds[resolution].RasterYSize
-        if bounds:
-            xax = x0+dx*np.arange(nx+1)
-            yax = y0+dy*np.arange(ny+1)
-        else:
-            xax = x0+dx*(0.5+np.arange(nx))
-            yax = y0+dy*(0.5+np.arange(ny))
-        return xax,yax
-
-    def get_proj_str(self):
-        sr = osr.SpatialReference() 
-        sr.ImportFromWkt(self.gdal_sds['10m'].GetProjection())
-        return sr.ExportToProj4()
-
-    def get_proj(self):
-        sr = osr.SpatialReference() 
-        sr.ImportFromWkt(self.gdal_sds['10m'].GetProjection())
-        return pyproj.Proj(sr.ExportToProj4())
-        
-    def get_lonlat(self, resolution="10m", bounds=False):
-        xax,yax = self.get_axes_xy(resolution,bounds)
-        xg,yg = np.meshgrid(xax,yax)
-        proj = self.get_proj()
-        return proj(xg,yg,inverse=True)

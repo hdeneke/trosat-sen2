@@ -8,6 +8,7 @@ import numpy as np
 import xarray as xr
 import pyproj
 
+from osgeo import gdal, ogr, osr
 
 from functools import cached_property
 from addict import Dict as adict

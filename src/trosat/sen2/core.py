@@ -1,17 +1,22 @@
+# Python standard library imports
 import os
 import re
 import zipfile
 
-from addict import Dict as adict
-from lxml import etree as et
-
-from functools import cached_property
-
+# SciPy imports
 import numpy as np
-from osgeo import gdal, osr
+import xarray as xr
 import pyproj
 
+
+from functools import cached_property
+from addict import Dict as adict
+
 from . import tilepar
+
+gdal.UseExceptions()
+ogr.UseExceptions()
+osr.UseExceptions()
 
 # Mapping for strings to GDAL resampling algorithm IDs
 resample_map = {

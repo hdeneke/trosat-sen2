@@ -14,18 +14,25 @@ from addict import Dict as adict
 
 from . import tilepar
 
+# enable GDAL/OGR/OSR exceptions to silence warning
 gdal.UseExceptions()
 ogr.UseExceptions()
 osr.UseExceptions()
 
 # Mapping for strings to GDAL resampling algorithm IDs
 resample_map = {
-    'nearest'      : gdal.GRA_NearestNeighbour, 'average'      : gdal.GRA_Average,
-    'bilinear'     : gdal.GRA_Bilinear,         'cubic'        : gdal.GRA_Cubic,
-    'cubic_spline' : gdal.GRA_CubicSpline,      'lanczos'      : gdal.GRA_Lanczos,
-    'min'          : gdal.GRA_Min,              'max'          : gdal.GRA_Max,
-    'mode'         : gdal.GRA_Mode,             'median'       : gdal.GRA_Med,
-    'Q1'           : gdal.GRA_Q1,               'Q3'           : gdal.GRA_Q3
+    'nearest'  : gdal.GRA_NearestNeighbour,
+    'average'  : gdal.GRA_Average,
+    'bilinear' : gdal.GRA_Bilinear,
+    'cubic'    : gdal.GRA_Cubic,
+    'cspline'  : gdal.GRA_CubicSpline,
+    'lanczos'  : gdal.GRA_Lanczos,
+    'min'      : gdal.GRA_Min,
+    'max'      : gdal.GRA_Max,
+    'mode'     : gdal.GRA_Mode,
+    'median'   : gdal.GRA_Med,
+    "Q1"       : gdal.GRA_Q1,
+    "Q3"       : gdal.GRA_Q3
 }
 
 def parse_data_obj(e, factory=dict):
@@ -37,7 +44,7 @@ def parse_data_obj(e, factory=dict):
     d['mimetype'] = f.attrib['mimeType']
     d['size']     = int(f.attrib['size'])
     d['relpath']  = f.find('fileLocation').attrib['href']
-    d['md5sum']   = f.find('checksum').text
+    d['checksum']   = f.find('checksum').text
     return d
 
 def parse_zen_azi(e):

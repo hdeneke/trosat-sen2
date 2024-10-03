@@ -120,6 +120,7 @@ class l1c_band(enum.IntEnum, metaclass=_enum_meta):
 # add bands to global namespace
 globals().update(l1c_band.__members__)
 
+
 def parse_data_obj(e, factory=dict):
     '''
     Parse data object elements in product metadata XML file
@@ -132,6 +133,7 @@ def parse_data_obj(e, factory=dict):
     d['checksum']   = f.find('checksum').text
     return d
 
+
 def parse_zen_azi(e):
     '''
     Parse zenith/azimuth angles in tile metadata XML file
@@ -139,6 +141,7 @@ def parse_zen_azi(e):
     zen  = np.array([ [float(v) for v in s.text.split()] for s in e.find('Zenith/Values_List') ])
     azi  = np.array([ [float(v) for v in s.text.split()] for s in e.find('Azimuth/Values_List')])
     return zen,azi
+
 
 def slice_band(rb, sx, sy):
     '''
@@ -175,6 +178,7 @@ def slice_band(rb, sx, sy):
     arr = rb.ReadAsArray(xoff=xl, yoff=yu, win_xsize=xr-xl,win_ysize=yb-yu)
     return arr[::dx,::dy]
 
+
 def translate_band(rb, res, res_alg, sx=None, sy=None):
     '''
     Translate a gdal.Band to new resolution, optionally selecting a sub-region by slices
@@ -210,6 +214,12 @@ def translate_band(rb, res, res_alg, sx=None, sy=None):
     # read translated array and return it
     arr = mds.GetRasterBand(1).ReadAsArray()
     return arr[::dx,::dy]
+
+
+def is_native_res(rb, res):
+    ds = rb.GetDataset()
+    _,nat_res,_,_,_,_ = ds.GetGeoTransform()
+    return np.isclose(nat_res, res)
 
 
 class safe_reader(object):

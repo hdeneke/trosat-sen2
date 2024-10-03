@@ -1,5 +1,6 @@
 # Python standard library imports
 import enum
+import math
 import os
 import re
 import zipfile
@@ -15,6 +16,7 @@ import pyproj
 # misc. function or class imports
 from functools import cached_property
 from addict import Dict as adict
+from lxml import etree as et
 
 # package-local imports
 from . import tilepar
@@ -237,7 +239,7 @@ class safe_reader(object):
         '''
 
         if self.zipfile:
-            p = os.path.normpath(os.path.join(self.safe_id+'.SAFE', name))
+            p = os.path.normpath(os.path.join(self.safe_dir, name))
             s = self.zipfile.read(p)
         else:
             p = os.path.normpath(os.path.join(self.path, name))

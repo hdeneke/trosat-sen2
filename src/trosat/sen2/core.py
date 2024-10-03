@@ -1,9 +1,12 @@
-import os, os.path
+import os
 import re
 import zipfile
+
 from addict import Dict as adict
 from lxml import etree as et
-from cached_property import cached_property
+
+from functools import cached_property
+
 import numpy as np
 from osgeo import gdal, osr
 import pyproj
@@ -20,11 +23,11 @@ resample_map = {
     'Q1'           : gdal.GRA_Q1,               'Q3'           : gdal.GRA_Q3
 }
 
-def parse_data_obj(e):
+def parse_data_obj(e, factory=dict):
     '''
     Parse data object elements in product metadata XML file
     '''
-    d = {}
+    d = factory()
     f = e.find('./byteStream')
     d['mimetype'] = f.attrib['mimeType']
     d['size']     = int(f.attrib['size'])

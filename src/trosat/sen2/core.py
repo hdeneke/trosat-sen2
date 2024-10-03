@@ -218,6 +218,22 @@ def translate_band(rb, res, res_alg, sx=None, sy=None):
     return arr[::dx,::dy]
 
 
+def read_band(rb, res, res_alg, sx, sy):
+    # read raster band and return it
+    if (res is None) or is_native_res(rb, res):
+        # >>>> no resampling needed
+        if sx is None and sy is None:
+            # >>>> no slicing needed
+            arr = rb.ReadAsArray()
+        else:
+            # >>>> slice raster band
+            arr = slice_band(rb, sx, sy)
+    else:
+        # >>>> we must resample, use gdal.Translate
+        arr = translate_band(rb, resolution, res_alg, sx, sy)        
+    return arr
+
+
 def is_native_res(rb, res):
     ds = rb.GetDataset()
     _,nat_res,_,_,_,_ = ds.GetGeoTransform()
@@ -260,4 +276,75 @@ class safe_reader(object):
 
         s = self.read_file(fpath)
         return et.fromstring(s)
+
+
+class l1c_reader(safe_reader):
+
+    def __init__(self, fpath):
+
+        # init fpath/zipfile/safe_dir attributes
+        if zipfile.is_zipfile(fpath):
+            self.zipfile  = zipfile.ZipFile(fpath, "r")
+            self.fpath    = os.path.abspath(fpath)
+            self.safe_dir = os.path.splitext(os.path.basename(fpath))[0]+".SAFE"
+        elif os.path.isdir(fpath):
+            self.zipfile  = False
+            self.safe_dir = os.path.abspath(fpath)
+            self.fpath    = os.path.join(self.safe_dir, "MTD_MSIL1C.xml")
+        elif os.path.isfile(fpath) and os.path.basename(fpath)=="MTD_MSIL1C.xml":
+            self.zipfile  = False
+            self.safe_dir = os.path.dirname(self.fpath)
+            self.fpath    = os.path.abspath(fpath)
+        else:
+            raise ValueError(f"Unrecognized SAFE file: {fpath}")
+
+        # open SAFE as GDAL datasets
+        self.gds  = gdal.Open(self.fpath, gdal.GA_ReadOnly)
+        self.sds = [
+            gdal.Open(sds, gdal.GA_ReadOnly)
+            for sds,_ in self.gds.GetSubDatasets()
+        ]
+
+        # parse manifest file
+        self.manifest = self.parse_xml('manifest.safe')
+
+        # get data objects
+        xpath_data_obj = './dataObjectSection/dataObject'
+        self.data_obj = adict({ 
+            e.attrib['ID']: parse_data_obj(e, factory=adict)
+            for e in  self.manifest.findall(xpath_data_obj) 
+        })
+        return
+
+
+    def get_band_ref(self, b):
+        if not isinstance(b, l1c_band):
+            b = l1c_band[b]
+        i,j = b.bidx
+        return self.sds[i].GetRasterBand(j)
+
+
+    def read_band(self, b, *, resolution=None, resample_alg=None, sx=None, sy=None):
+        '''
+        Read Sentinel-2 band
+
+        Parameters
+        ----------
+        bnd : str, int, or l1c_band
+            The band, e.g. 'B01'...'B11' and 'B8A'
+        resolution: None, int or str
+            The resolution as None, int or string(e.g. '20m','native')
+        resampling: str, default= 'average' if resolution>'native' else 'cubic'
+            The resampling algorithm, valid choices are 'nearest','bilinear','cubic','cubic_spline',
+            'average','lanczos','min','max','mode','median','Q1','Q3'
+        sx : None or slice
+            Slice along the x-axis, applied after resampling
+        sy : None or slice
+            Slice along the y-axis, applied after resampling
+        '''
+        # get gdal raster band ref.
+        rb = self.get_band_ref(b)
+        res_alg = resample_map[resample_alg] if isinstance(resample_alg, str) else resample_alg
+        return read_band(rb, resolution, res_alg, sx, sy)
+        
 

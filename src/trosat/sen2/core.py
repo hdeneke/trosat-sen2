@@ -35,6 +35,86 @@ resample_map = {
     "Q3"       : gdal.GRA_Q3
 }
 
+
+class _enum_meta(enum.EnumMeta):
+    def __getitem__(self, item):
+        if hasattr(self, "norm"): 
+            item = self.norm(item)
+        return super().__getitem__(item)
+
+
+class l1c_band(enum.IntEnum, metaclass=_enum_meta):
+
+    B01 =  0, 60.0, (2,1)
+    B02 =  1, 10.0, (0,3)
+    B03 =  2, 10.0, (0,2)
+    B04 =  3, 10.0, (0,1)
+    B05 =  4, 20.0, (1,1)
+    B06 =  5, 20.0, (1,2)
+    B07 =  6, 20.0, (1,3)
+    B08 =  7, 10.0, (0,4)
+    B8A =  8, 20.0, (1,4)    
+    B09 =  9, 60.0, (2,2)    
+    B10 = 10, 60.0, (2,3)    
+    B11 = 11, 20.0, (1,5)    
+    B12 = 12, 20.0, (1,6)    
+
+    def __new__(cls, val, res, bidx):
+        obj = int.__new__(cls, val)
+        obj._value_ = val
+        obj.res = res
+        obj.bidx = bidx
+        return obj
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def band_id(self):
+        return self._value_
+
+    @classmethod
+    def is_native_res(cls, b, res):
+        b = b if isinstance(b, cls) else cls[b]
+        return np.isclose(b.res, res)
+        
+    @classmethod
+    def norm(self, s):
+        if isinstance(s, str):
+            m = re.match('^(B)?(\d+)(A)?$', s, re.IGNORECASE)
+            if m:
+                n = int(m[2])
+                s = f'B{n}A'  if m[3] else f'B{n:0>2d}'
+        elif isinstance(s, int):
+            for k,v in l1c_band.__members__.items():
+                if v._value_==s:
+                    s = k
+                    break
+        return s
+
+    @classmethod
+    def parse_list(cls, s, sep=','):
+        '''
+        Parse a string into a list of bands
+        '''
+        return [cls[b] for b in s.split(sep)]
+
+    @classmethod
+    def match_bands(cls, regex, flags=re.IGNORECASE):
+        '''
+        
+        '''
+        p = re.compile(regex, flags)
+        blist = [
+            cls[b]
+            for b in list(cls.__members__.keys())
+            if p.match(b)
+        ]
+        return blist
+
+# add bands to global namespace
+globals().update(l1c_band.__members__)
+
 def parse_data_obj(e, factory=dict):
     '''
     Parse data object elements in product metadata XML file

@@ -502,3 +502,33 @@ class l1c_reader(safe_reader):
         xg,yg = np.meshgrid(xax,yax)
         proj = self.get_proj()
         return proj(xg,yg,inverse=True)
+
+    def get_sun_angles(self, axes=True):
+        tm = self.tile_mtd
+        e  = tm.find('n1:Geometric_Info/Tile_Angles/Sun_Angles_Grid', tm.nsmap)
+        szen,sazi = parse_zen_azi(e)
+        retval = (szen, sazi)
+        if axes:
+            x,y = self.get_xy_ul()
+            dx,dy = ( float(e.find('Zenith/'+s).text) for s in ('COL_STEP','ROW_STEP'))
+            xax = x+dx*np.arange(szen.shape[1],dtype=float)
+            yax = y-dy*np.arange(szen.shape[0],dtype=float)
+            return szen,sazi,(xax,yax)
+        else:
+            return szen,sazi
+
+    def get_view_angles(self, b):
+        '''
+        Get band-specific viewing angles
+        '''
+        b   = l1c_band[b] if not isinstance(b, l1c_band) else b
+        tm = self.tile_mtd
+        vzen = {}
+        vazi = {}
+        xp_fmt = "n1:Geometric_Info/Tile_Angles/Viewing_Incidence_Angles_Grids[@bandId='{0}']"
+        for e in tm.iterfind( xp_fmt.format(b.band_id), tm.nsmap):
+            det_id = int(e.attrib['detectorId'])
+            zn, az = parse_zen_azi( e )
+            vzen[det_id] = zn
+            vazi[det_id] = az
+        return vzen,vazi

@@ -532,12 +532,56 @@ class l1c_reader(safe_reader):
             zn, az = parse_zen_azi( e )
             vzen[det_id] = zn
             vazi[det_id] = az
+            s = zn.shape
             dx,dy = ( float(e.find('Zenith/'+s).text) for s in ('COL_STEP','ROW_STEP'))
         if axes:
             x,y = self.get_xy_ul()
-            dx,dy = ( float(e.find('Zenith/'+s).text) for s in ('COL_STEP','ROW_STEP'))
-            xax = x+dx*np.arange(szen.shape[1],dtype=float)
-            yax = y-dy*np.arange(szen.shape[0],dtype=float)
+            xax = x+dx*np.arange(s[1],dtype=float)
+            yax = y-dy*np.arange(s[0],dtype=float)
             return vzen,vazi,(xax,yax)
         else:
             return vzen,vazi
+
+    def get_detector_starttime(self):
+        dm = self.datastrip_mtd
+        # create empty dictionary as return value
+        det_stime = dict()
+        # iterate over the Band_Time_Stamp elements
+        xp = 'n1:Image_Data_Info/Sensor_Configuration/Time_Stamp/Band_Time_Stamp'
+        for bnd_tstamp in dm.iterfind(xp, dm.nsmap):
+            bnd_id = int(bnd_tstamp.attrib['bandId'])
+            # add empty dict
+            det_stime[bnd_id] = dict()
+            # iterate over detectors
+            for det in bnd_tstamp.iterfind('Detector'):
+                # parse time and detector ID
+                ts     = np.datetime64(det.find('GPS_TIME').text)
+                det_id = int(det.attrib['detectorId'])
+                det_stime[bnd_id][det_id] = ts
+        return det_stime
+
+    def get_gps_ephem(self):
+
+        def parse_gps_elem(e):
+            time     = np.datetime64(e.find('GPS_TIME').text)
+            x,y,z    = np.fromstring(e.find('POSITION_VALUES').text, float, sep=' ')/1e3
+            vx,vy,vz = np.fromstring(e.find('VELOCITY_VALUES').text, float, sep=' ')/1e3
+            return time,x,y,z,vx,vy,vz
+
+        gps_ephem_dtype = [
+            ('time','M8[ns]'), ('x','f8'),('y','f8'),('z','f8'), 
+            ('vx','f8'),('vy','f8'),('vz','f8')
+        ]
+    
+        dsm = self.datastrip_mtd
+        xp =  'n1:Satellite_Ancillary_Data_Info/Ephemeris/GPS_Points_List/GPS_Point'
+        pts = np.array(
+            [ 
+                parse_gps_elem(p)
+                for p in dsm.iterfind(xp, dsm.nsmap)
+            ],
+            dtype=ephem_dtype,
+        ).view(np.recarray)
+        return pts
+
+    

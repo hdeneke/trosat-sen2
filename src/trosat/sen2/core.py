@@ -443,3 +443,62 @@ class l1c_reader(safe_reader):
         rb  = self.qamask_ds[b.name].GetRasterBand(1)
         arr = read_band(rb, resolution, gdal.GRA_NearestNeighbour, sx, sy)
         return arr
+
+    def get_tile_id(self):
+        tm = self.tile_mtd
+        return tm.find('n1:General_Info/TILE_ID',tm.nsmap).text
+
+    def get_sensing_time(self):
+        tm = self.tile_mtd
+        tstr = tm.find('n1:General_Info/SENSING_TIME',tm.nsmap).text
+        return np.datetime64(tstr[:-1])
+    
+    def get_epsg_code(self):
+        '''
+        Get EPSG code
+        '''
+        tm = self.tile_mtd
+        s = tm.find('n1:Geometric_Info/Tile_Geocoding/HORIZONTAL_CS_CODE',tm.nsmap).text
+        return int(s.split(':')[1])
+    
+    def get_proj_str(self):
+        sr = osr.SpatialReference() 
+        sr.ImportFromWkt(self.sds[0].GetProjection())
+        return sr.ExportToProj4()
+
+    def get_proj(self):
+        '''
+        Get a pyproj Projection object
+        '''
+        return pyproj.Proj(self.get_proj_str())
+
+    def get_xy_ul(self):
+        '''
+        Get the xy coordinates of the upper left corner
+        '''
+        x0,_,_,y0,_,_ = self.sds[0].GetGeoTransform()
+        return x0,y0
+
+    def get_xy_axes(self, res=10.0, bounds=False):
+        if np.isclose(res,10.0):
+            i=0
+        elif np.isclose(res,20.0):
+            i=1
+        elif np.isclose(res, 60.0):
+            i=2
+        x0,dx,_,y0,_,dy = self.sds[i].GetGeoTransform()
+        nx = self.sds[i].RasterXSize
+        ny = self.sds[i].RasterYSize
+        if bounds:
+            xax = x0+dx*np.arange(nx+1)
+            yax = y0+dy*np.arange(ny+1)
+        else:
+            xax = x0+dx*(0.5+np.arange(nx))
+            yax = y0+dy*(0.5+np.arange(ny))
+        return xax,yax
+    
+    def get_lonlat(self, res=10.0, bounds=False):
+        xax,yax = self.get_xy_axes(res,bounds)
+        xg,yg = np.meshgrid(xax,yax)
+        proj = self.get_proj()
+        return proj(xg,yg,inverse=True)

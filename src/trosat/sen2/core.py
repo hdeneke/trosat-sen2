@@ -580,7 +580,7 @@ class l1c_reader(safe_reader):
                 parse_gps_elem(p)
                 for p in dsm.iterfind(xp, dsm.nsmap)
             ],
-            dtype=ephem_dtype,
+            dtype=gps_ephem_dtype,
         ).view(np.recarray)
         return pts
 

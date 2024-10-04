@@ -205,6 +205,7 @@ def translate_band(rb, res, res_alg, sx=None, sy=None):
     if dx<0 or dy<0: 
         raise ValueError("Negative strides not supported")
     if xl>xr or yu>yb: 
+        raise ValueError("stop must be greater than start in slices")
 
     # prepare translate options
     topts = gdal.TranslateOptions(
@@ -517,7 +518,7 @@ class l1c_reader(safe_reader):
         else:
             return szen,sazi
 
-    def get_view_angles(self, b):
+    def get_view_angles(self, b, axes=True):
         '''
         Get band-specific viewing angles
         '''
@@ -526,9 +527,17 @@ class l1c_reader(safe_reader):
         vzen = {}
         vazi = {}
         xp_fmt = "n1:Geometric_Info/Tile_Angles/Viewing_Incidence_Angles_Grids[@bandId='{0}']"
-        for e in tm.iterfind( xp_fmt.format(b.band_id), tm.nsmap):
+        for e in tm.iterfind(xp_fmt.format(b.band_id), tm.nsmap):
             det_id = int(e.attrib['detectorId'])
             zn, az = parse_zen_azi( e )
             vzen[det_id] = zn
             vazi[det_id] = az
-        return vzen,vazi
+            dx,dy = ( float(e.find('Zenith/'+s).text) for s in ('COL_STEP','ROW_STEP'))
+        if axes:
+            x,y = self.get_xy_ul()
+            dx,dy = ( float(e.find('Zenith/'+s).text) for s in ('COL_STEP','ROW_STEP'))
+            xax = x+dx*np.arange(szen.shape[1],dtype=float)
+            yax = y-dy*np.arange(szen.shape[0],dtype=float)
+            return vzen,vazi,(xax,yax)
+        else:
+            return vzen,vazi

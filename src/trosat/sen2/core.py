@@ -5,7 +5,7 @@ import os
 import re
 import zipfile
 
-# SciPy imports
+# SciPy importsR
 import numpy as np
 import xarray as xr
 
@@ -185,23 +185,27 @@ def translate_band(rb, res, res_alg, sx=None, sy=None):
     '''
     Translate a gdal.Band to new resolution, optionally selecting a sub-region by slices
     '''        
+
     # get Dataset of raster and get raster shape / resolution
     ds = rb.GetDataset()
     xx,nat_res,_,yy,_,_ = ds.GetGeoTransform()
     nx,ny = ds.RasterXSize,ds.RasterYSize
+
     # get shape in new resolution
     nx = math.floor(nx*nat_res/res)
     ny = math.floor(ny*nat_res/res)
+
     # determine requested sub-window
     sx = sx or slice(None)
     sy = sy or slice(None)
     xl,xr,dx = sx.indices(nx)
     yu,yb,dy = sy.indices(ny)
+
     # sanity checks
     if dx<0 or dy<0: 
         raise ValueError("Negative strides not supported")
     if xl>xr or yu>yb: 
-        raise ValueError("start greater stop in slice not supported")            
+
     # prepare translate options
     topts = gdal.TranslateOptions(
         format="MEM",
@@ -211,8 +215,10 @@ def translate_band(rb, res, res_alg, sx=None, sy=None):
         yRes=float(res),
         resampleAlg=res_alg,
     )
-    # apply translation
+
+    # do gdal.Translate
     mds = gdal.Translate('', ds, options=topts)
+
     # read translated array and return it
     arr = mds.GetRasterBand(1).ReadAsArray()
     return arr[::dx,::dy]
@@ -325,7 +331,35 @@ class l1c_reader(safe_reader):
         else:
             raise ValueError(f"Unrecognized SAFE file: {fpath}")
         return
+    
+    @cached_property
+    def l1c_mtd(self):
+        return self.parse_xml(self.data_obj["S2_Level-1C_Product_Metadata"].relpath)
 
+    @cached_property
+    def tile_mtd(self):
+        return self.parse_xml(self.data_obj["S2_Level-1C_Tile1_Metadata"].relpath)
+
+    @cached_property
+    def datastrip_mtd(self):
+        return self.parse_xml(self.data_obj["S2_Level-1C_Datastrip1_Metadata"].relpath)
+
+    @cached_property
+    def detfoo_ds(self):
+        return {
+            m[1]:self.open_gdal(v.relpath)
+            for v in rdr.data_obj.values()
+            if (m:=re.match('^MSK_DETFOO_(B\d[\dA]).jp2$', os.path.basename(v.relpath)))
+        }
+        return 
+
+    @cached_property
+    def qamask_ds(self):
+        return {
+            m[1]:self.open_gdal(v.relpath)
+            for v in rdr.data_obj.values()
+            if (m:=re.match('^MSK_QUALIT_(B\d[\dA]).jp2$', os.path.basename(v.relpath)))
+        }
 
     def get_band_ref(self, b):
         b = l1c_band[b] if not isinstance(b, l1c_band) else b
@@ -409,34 +443,3 @@ class l1c_reader(safe_reader):
         rb  = self.qamask_ds[b.name].GetRasterBand(1)
         arr = read_band(rb, resolution, gdal.GRA_NearestNeighbour, sx, sy)
         return arr
-
-
-    @cached_property
-    def l1c_mtd(self):
-        return self.parse_xml(self.data_obj["S2_Level-1C_Product_Metadata"].relpath)
-
-
-    @cached_property
-    def tile_mtd(self):
-        return self.parse_xml(self.data_obj["S2_Level-1C_Tile1_Metadata"].relpath)
-
-    @cached_property
-    def datastrip_mtd(self):
-        return self.parse_xml(self.data_obj["S2_Level-1C_Datastrip1_Metadata"].relpath)
-
-    @cached_property
-    def detfoo_ds(self):
-        return {
-            m[1]:self.open_gdal(v.relpath)
-            for k,v in rdr.data_obj.items()
-            if (m:=re.match('^MSK_DETFOO_(B\d[\dA]).jp2$', os.path.basename(v.relpath)))
-        }
-        return 
-
-    @cached_property
-    def qamask_ds(self):
-        return {
-            m[1]:self.open_gdal(v.relpath)
-            for k,v in rdr.data_obj.items()
-            if (m:=re.match('^MSK_QUALIT_(B\d[\dA]).jp2$', os.path.basename(v.relpath)))
-        }

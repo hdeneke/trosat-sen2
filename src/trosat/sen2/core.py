@@ -258,8 +258,8 @@ class safe_reader(object):
             p = os.path.normpath(os.path.join(self.safe_dir, name))
             s = self.zipfile.read(p)
         else:
-            p = os.path.normpath(os.path.join(self.path, name))
-            f = open(os.path.normpath(p), 'r')
+            p = os.path.normpath(os.path.join(self.safe_dir, name))
+            f = open(p, 'r')
             s = f.read()
             f.close()
         return s
@@ -276,6 +276,34 @@ class safe_reader(object):
 
         s = self.read_file(fpath)
         return et.fromstring(s)
+
+    @cached_property
+    def inspire_mtd(self):
+        return self.parse_xml(self.data_obj["INSPIRE_Metadata"].relpath)
+
+    @cached_property
+    def manifest(self):
+        return self.parse_xml('manifest.safe')
+
+    @cached_property
+    def gds(self):
+        return gdal.Open(self.fpath, gdal.GA_ReadOnly)
+
+    @cached_property
+    def sds(self):
+        return [
+            gdal.Open(_sds, gdal.GA_ReadOnly)
+            for _sds,_ in self.gds.GetSubDatasets()
+            
+        ]
+
+    @cached_property
+    def data_obj(self):
+        xpath_data_obj = './dataObjectSection/dataObject'
+        return adict({
+            e.attrib['ID']: parse_data_obj(e, factory=adict)
+            for e in self.manifest.findall(xpath_data_obj) 
+        })
 
 
 class l1c_reader(safe_reader):
@@ -297,29 +325,11 @@ class l1c_reader(safe_reader):
             self.fpath    = os.path.abspath(fpath)
         else:
             raise ValueError(f"Unrecognized SAFE file: {fpath}")
-
-        # open SAFE as GDAL datasets
-        self.gds  = gdal.Open(self.fpath, gdal.GA_ReadOnly)
-        self.sds = [
-            gdal.Open(sds, gdal.GA_ReadOnly)
-            for sds,_ in self.gds.GetSubDatasets()
-        ]
-
-        # parse manifest file
-        self.manifest = self.parse_xml('manifest.safe')
-
-        # get data objects
-        xpath_data_obj = './dataObjectSection/dataObject'
-        self.data_obj = adict({ 
-            e.attrib['ID']: parse_data_obj(e, factory=adict)
-            for e in  self.manifest.findall(xpath_data_obj) 
-        })
         return
 
 
     def get_band_ref(self, b):
-        if not isinstance(b, l1c_band):
-            b = l1c_band[b]
+        b = l1c_band[b] if not isinstance(b, l1c_band) else b
         i,j = b.bidx
         return self.sds[i].GetRasterBand(j)
 
@@ -347,13 +357,11 @@ class l1c_reader(safe_reader):
         res_alg = resample_map[resample_alg] if isinstance(resample_alg, str) else resample_alg
         return read_band(rb, resolution, res_alg, sx, sy)
 
+
     @cached_property
     def l1c_mtd(self):
         return self.parse_xml(self.data_obj["S2_Level-1C_Product_Metadata"].relpath)
 
-    @cached_property
-    def inspire_mtd(self):
-        return self.parse_xml(self.data_obj["INSPIRE_Metadata"].relpath)
 
     @cached_property
     def tile_mtd(self):

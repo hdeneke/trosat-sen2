@@ -309,7 +309,6 @@ class safe_reader(object):
 class l1c_reader(safe_reader):
 
     def __init__(self, fpath):
-
         # init fpath/zipfile/safe_dir attributes
         if zipfile.is_zipfile(fpath):
             self.zipfile  = zipfile.ZipFile(fpath, "r")
@@ -357,6 +356,60 @@ class l1c_reader(safe_reader):
         res_alg = resample_map[resample_alg] if isinstance(resample_alg, str) else resample_alg
         return read_band(rb, resolution, res_alg, sx, sy)
 
+    
+    def open_gdal(self, relpath):
+        if self.zipfile:
+            fpath = "/vsizip/" + os.path.normpath(self.fpath) \
+                + "/"+os.path.normpath(
+                    os.path.join(self.safe_dir, relpath)
+                )
+        else:
+            fpath = os.path.normpath(os.path.join(rdr.safe_dir, relpath))
+        ds = gdal.Open(fpath)
+        return ds
+
+
+    def read_detfoo(self, b, resolution=None, sx=None, sy=None):
+        '''
+        Read Sentinel-2 detector footprint mask
+
+        Parameters
+        ----------
+        bnd : str, int, or l1c_band
+            The band, e.g. 'B01'...'B11' and 'B8A'
+        resolution: None or int
+            The resolution as None or int
+        sx : None or slice
+            Slice along the x-axis, applied after resampling
+        sy : None or slice
+            Slice along the y-axis, applied after resampling
+        '''
+        b   = l1c_band[b] if not isinstance(b, l1c_band) else b
+        rb  = self.detfoo_ds[b.name].GetRasterBand(1)
+        arr = read_band(rb, resolution, gdal.GRA_NearestNeighbour, sx, sy)
+        return arr
+
+
+    def read_qamask(self, b, resolution=None, sx=None, sy=None):
+        '''
+        Read Sentinel-2 band quality mask
+
+        Parameters
+        ----------
+        bnd : str, int, or l1c_band
+            The band, e.g. 'B01'...'B11' and 'B8A'
+        resolution: None or int
+            The resolution as None or int
+        sx : None or slice
+            Slice along the x-axis, applied after resampling
+        sy : None or slice
+            Slice along the y-axis, applied after resampling
+        '''
+        b   = l1c_band[b] if not isinstance(b, l1c_band) else b
+        rb  = self.qamask_ds[b.name].GetRasterBand(1)
+        arr = read_band(rb, resolution, gdal.GRA_NearestNeighbour, sx, sy)
+        return arr
+
 
     @cached_property
     def l1c_mtd(self):
@@ -371,4 +424,19 @@ class l1c_reader(safe_reader):
     def datastrip_mtd(self):
         return self.parse_xml(self.data_obj["S2_Level-1C_Datastrip1_Metadata"].relpath)
 
+    @cached_property
+    def detfoo_ds(self):
+        return {
+            m[1]:self.open_gdal(v.relpath)
+            for k,v in rdr.data_obj.items()
+            if (m:=re.match('^MSK_DETFOO_(B\d[\dA]).jp2$', os.path.basename(v.relpath)))
+        }
+        return 
 
+    @cached_property
+    def qamask_ds(self):
+        return {
+            m[1]:self.open_gdal(v.relpath)
+            for k,v in rdr.data_obj.items()
+            if (m:=re.match('^MSK_QUALIT_(B\d[\dA]).jp2$', os.path.basename(v.relpath)))
+        }

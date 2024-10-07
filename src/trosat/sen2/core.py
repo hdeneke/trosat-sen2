@@ -237,7 +237,7 @@ def read_band(rb, res, res_alg, sx, sy):
             arr = slice_band(rb, sx, sy)
     else:
         # >>>> we must resample, use gdal.Translate
-        arr = translate_band(rb, resolution, res_alg, sx, sy)        
+        arr = translate_band(rb, res, res_alg, sx, sy)        
     return arr
 
 

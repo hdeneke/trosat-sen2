@@ -355,7 +355,7 @@ class l1c_reader(safe_reader):
         return 
 
     @cached_property
-    def qamask_ds(self):
+    def qmask_ds(self):
         return {
             m[1]:self.open_gdal(v.relpath)
             for v in rdr.data_obj.values()
@@ -425,7 +425,7 @@ class l1c_reader(safe_reader):
         return arr
 
 
-    def read_qamask(self, b, resolution=None, sx=None, sy=None):
+    def read_qmask(self, b, resolution=None, sx=None, sy=None):
         '''
         Read Sentinel-2 band quality mask
 
@@ -441,7 +441,7 @@ class l1c_reader(safe_reader):
             Slice along the y-axis, applied after resampling
         '''
         b   = l1c_band[b] if not isinstance(b, l1c_band) else b
-        rb  = self.qamask_ds[b.name].GetRasterBand(1)
+        rb  = self.qmask_ds[b.name].GetRasterBand(1)
         arr = read_band(rb, resolution, gdal.GRA_NearestNeighbour, sx, sy)
         return arr
 

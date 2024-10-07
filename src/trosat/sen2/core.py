@@ -17,6 +17,7 @@ import pyproj
 from functools import cached_property
 from addict import Dict as adict
 from lxml import etree as et
+from toolz import dicttoolz
 
 # package-local imports
 from . import tilepar
@@ -41,6 +42,9 @@ resample_map = {
     "Q1"       : gdal.GRA_Q1,
     "Q3"       : gdal.GRA_Q3
 }
+
+
+key2lc = lambda d: dicttoolz.keymap(str.lower, d)
 
 
 class _enum_meta(enum.EnumMeta):
@@ -444,6 +448,57 @@ class l1c_reader(safe_reader):
         rb  = self.qmask_ds[b.name].GetRasterBand(1)
         arr = read_band(rb, resolution, gdal.GRA_NearestNeighbour, sx, sy)
         return arr
+
+    def get_band_attrs(self, b):
+        # dict containing type conversion
+        _tconv = {
+            "bandwidth": float,
+            "radio_add_offset": float, 
+            "solar_irradiance": float,
+            "wavelength": float
+        }
+        # get gdal band
+        b  = b if isinstance(b, l1c_band) else l1c_band[b]
+        rb = self.get_band_ref(b)
+        # convert keys to lower case and convert type conversion
+        atts = {
+            k:_tconv[k](v) if k in _tconv else v
+            for k,v in key2lc(rb.GetMetadata_Dict()).items()
+        }
+        # add additional attributes
+        atts.update({
+            "bandname": b.name,
+            "band_id": b.value,
+            "resolution": b.res,
+            "resolution_units": "m",
+        })
+        # return attributes as sorted dict
+        return dict(sorted(atts.items()))
+
+    def get_global_attrs(self):
+        # dict containing type conversion
+        _tconv = {
+            "cloud_coverage_assessment": float,
+            "reflectance_conversion_u": float,
+            "degraded_anc_data_percentage": float,
+            "degraded_msi_data_percentage": float,
+            "reference_band": l1c_band.norm,
+            "datatake_1_sensing_orbit_number": int,
+            "quantification_value": int,
+            "special_value_nodata": np.uint16,
+            "special_value_saturated": np.uint16,            
+        }
+        gatts = {
+            k:_tconv[k](v) if k in _tconv else v
+            for k,v in key2lc(self.gds.GetMetadata_Dict()).items()
+        }
+        gatts = {
+            **{
+                "Convenctions": "CF-1.11",
+            },
+            **dict(sorted(gatts.items()))
+        }
+        return gatts
 
     def get_tile_id(self):
         tm = self.tile_mtd

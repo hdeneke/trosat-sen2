@@ -532,29 +532,37 @@ class l1c_reader(safe_reader):
         '''
         Get the xy coordinates of the upper left corner
         '''
-        x0,_,_,y0,_,_ = self.sds[0].GetGeoTransform()
-        return x0,y0
+        ulx,_,_,uly,_,_ = self.sds[0].GetGeoTransform()
+        return ulx,uly
 
-    def get_xy_axes(self, res=10.0, bounds=False):
-        if np.isclose(res,10.0):
-            i=0
-        elif np.isclose(res,20.0):
-            i=1
+    def get_xy_axes(self, res=10.0, bounds=False, sx=None, sy=None):
+
+        if np.isclose(res, 10.0):
+            res=10.0
+            n = 10980
+        elif np.isclose(res, 20.0):
+            res=20.0
+            n = 5490
         elif np.isclose(res, 60.0):
-            i=2
-        x0,dx,_,y0,_,dy = self.sds[i].GetGeoTransform()
-        nx = self.sds[i].RasterXSize
-        ny = self.sds[i].RasterYSize
-        if bounds:
-            xax = x0+dx*np.arange(nx+1)
-            yax = y0+dy*np.arange(ny+1)
+            res=60.0
+            n = 1830
         else:
-            xax = x0+dx*(0.5+np.arange(nx))
-            yax = y0+dy*(0.5+np.arange(ny))
-        return xax,yax
-    
-    def get_lonlat(self, res=10.0, bounds=False):
-        xax,yax = self.get_xy_axes(res,bounds)
+            n = np.floor(10.0/res*10980).astype(int) 
+
+        ulx,_,_,uly,_,_ = self.sds[0].GetGeoTransform()
+        if bounds:
+            xax = ulx+res*np.arange(n+1)
+            yax = uly-res*np.arange(n+1)
+        else:
+            xax = ulx+res*(0.5+np.arange(n))
+            yax = uly-res*(0.5+np.arange(n))
+        return (
+            xax if sx is None else xax[sx],
+            yax if sy is None else yax[sy],
+        )
+
+    def get_lonlat(self, res=10.0, bounds=False, sx=None, sy=None):
+        xax,yax = self.get_xy_axes(res,bounds, sx=sx, sy=sy)
         xg,yg = np.meshgrid(xax,yax)
         proj = self.get_proj()
         return proj(xg,yg,inverse=True)

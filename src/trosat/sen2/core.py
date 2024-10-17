@@ -353,7 +353,7 @@ class l1c_reader(safe_reader):
     def detfoo_ds(self):
         return {
             m[1]:self.open_gdal(v.relpath)
-            for v in rdr.data_obj.values()
+            for v in self.data_obj.values()
             if (m:=re.match('^MSK_DETFOO_(B\d[\dA]).jp2$', os.path.basename(v.relpath)))
         }
         return 
@@ -362,7 +362,7 @@ class l1c_reader(safe_reader):
     def qmask_ds(self):
         return {
             m[1]:self.open_gdal(v.relpath)
-            for v in rdr.data_obj.values()
+            for v in self.data_obj.values()
             if (m:=re.match('^MSK_QUALIT_(B\d[\dA]).jp2$', os.path.basename(v.relpath)))
         }
 

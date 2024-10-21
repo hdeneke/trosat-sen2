@@ -645,6 +645,29 @@ class l1c_reader(safe_reader):
             ],
             dtype=gps_ephem_dtype,
         ).view(np.recarray)
-        return pts    
+        return pts
 
-    
+    def close(self):
+        # close zipfile
+        if self.zipfile:
+            self.zipfile.close()
+        # close gdal main and sub-Datasets
+        if "sds" in self.__dict__:
+            for i in range(len(self.sds)):
+                self.sds[i] = None
+            del self.__dict__["sds"]
+        if "ds" in self.__dict__:
+            self.ds = None
+            del self.__dict__["ds"]
+        # close detector footprint datasets
+        if "detfoo_ds" in self.__dict__:
+            for k in self.detfoo_ds.keys():
+                self.detfoo_ds[k] = None
+            del self.__dict__["detfoo_ds"]
+        # close quality mask datasets
+        if "qmask_ds" in self.__dict__:
+            for k in self.qmask_ds.keys():
+                self.qmask_ds[k] = None
+            del self.__dict__["qmask_ds"]
+        # ... and we are done ;-)
+        return

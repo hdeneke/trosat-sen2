@@ -372,7 +372,7 @@ class l1c_reader(safe_reader):
         return self.sds[i].GetRasterBand(j)
 
 
-    def read_band(self, b, *, resolution=None, resample_alg=None, sx=None, sy=None):
+    def read_band(self, b, *, res=None, rs_algo=None, sx=None, sy=None):
         '''
         Read Sentinel-2 band
 
@@ -380,9 +380,9 @@ class l1c_reader(safe_reader):
         ----------
         bnd : str, int, or l1c_band
             The band, e.g. 'B01'...'B11' and 'B8A'
-        resolution: None, int or str
-            The resolution as None, int or string(e.g. '20m','native')
-        resampling: str, default= 'average' if resolution>'native' else 'cubic'
+        res: None, int or float
+            The resolution as None, int or float
+        rs_algo: str or None
             The resampling algorithm, valid choices are 'nearest','bilinear','cubic','cubic_spline',
             'average','lanczos','min','max','mode','median','Q1','Q3'
         sx : None or slice
@@ -392,8 +392,8 @@ class l1c_reader(safe_reader):
         '''
         # get gdal raster band ref.
         rb = self.get_band_ref(b)
-        res_alg = resample_map[resample_alg] if isinstance(resample_alg, str) else resample_alg
-        return read_band(rb, resolution, res_alg, sx, sy)
+        rs_alg = rs_map[rs_algo] if isinstance(rs_algo, str) else rs_algo
+        return read_band(rb, res, rs_algo, sx, sy)
 
     
     def open_gdal(self, relpath):
@@ -408,7 +408,7 @@ class l1c_reader(safe_reader):
         return ds
 
 
-    def read_detfoo(self, b, resolution=None, sx=None, sy=None):
+    def read_detfoo(self, b, res=None, sx=None, sy=None):
         '''
         Read Sentinel-2 detector footprint mask
 
@@ -416,7 +416,7 @@ class l1c_reader(safe_reader):
         ----------
         bnd : str, int, or l1c_band
             The band, e.g. 'B01'...'B11' and 'B8A'
-        resolution: None or int
+        res: None or int/float
             The resolution as None or int
         sx : None or slice
             Slice along the x-axis, applied after resampling
@@ -425,11 +425,11 @@ class l1c_reader(safe_reader):
         '''
         b   = l1c_band[b] if not isinstance(b, l1c_band) else b
         rb  = self.detfoo_ds[b.name].GetRasterBand(1)
-        arr = read_band(rb, resolution, gdal.GRA_NearestNeighbour, sx, sy)
+        arr = read_band(rb, res, gdal.GRA_NearestNeighbour, sx, sy)
         return arr
 
 
-    def read_qmask(self, b, resolution=None, sx=None, sy=None):
+    def read_qmask(self, b, res=None, sx=None, sy=None):
         '''
         Read Sentinel-2 band quality mask
 
@@ -437,7 +437,7 @@ class l1c_reader(safe_reader):
         ----------
         bnd : str, int, or l1c_band
             The band, e.g. 'B01'...'B11' and 'B8A'
-        resolution: None or int
+        res: None or int
             The resolution as None or int
         sx : None or slice
             Slice along the x-axis, applied after resampling
@@ -446,7 +446,7 @@ class l1c_reader(safe_reader):
         '''
         b   = l1c_band[b] if not isinstance(b, l1c_band) else b
         rb  = self.qmask_ds[b.name].GetRasterBand(1)
-        arr = read_band(rb, resolution, gdal.GRA_NearestNeighbour, sx, sy)
+        arr = read_band(rb, res, gdal.GRA_NearestNeighbour, sx, sy)
         return arr
 
     def get_band_attrs(self, b):
@@ -645,6 +645,6 @@ class l1c_reader(safe_reader):
             ],
             dtype=gps_ephem_dtype,
         ).view(np.recarray)
-        return pts
+        return pts    
 
     

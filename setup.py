@@ -38,7 +38,6 @@ setup(
     package_dir  = { '': 'src'},
     package_data = { 'trosat.sen2': ['share/*']},
     install_requires = [
-        'attrdict',
         'gdal',
     ],
     keywords = ['Sentinel-2'],
